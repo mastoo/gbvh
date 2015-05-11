@@ -10,6 +10,8 @@
 struct mesh{
 	std::vector<vec3d> vlist;
 	std::vector<vec4i> flist;	
+    std::vector<vec3d> nlist; //list of normals
+
 	aabb bb;
 };
 
