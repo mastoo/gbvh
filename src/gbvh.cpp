@@ -13,10 +13,9 @@
 #include "aabb.h"
 #include "bvh.h"
 #include "tris.h"
-#include "normals.h"
+#include "normals_and_curvatures.h"
 
 enum INPUT_FORMAT {STL,PLY,OBJ};
-
 
 struct mesh_file{
 	std::string filename;
@@ -45,7 +44,8 @@ int main(int argc, char** argv){
 	
 	std::vector<mesh_file> mesh_list;
 	mesh  global_mesh;
-    bool normal_required  = false;
+    bool write_normal = false;   
+    bool assume_flat  = false;
 	OUTPUT_FORMAT oformat = BIN;
 	
 	std::cerr << "gbvh " << __TIME__ << " " << __DATE__ << std::endl;
@@ -81,9 +81,12 @@ int main(int argc, char** argv){
 				oformat = NBIN;
 			}
 			
-			if(arg == "-nrml"){
-                normal_required = true;
+
+
+            if(arg == "-flat"){
+                assume_flat = true;
             }
+            
 		}
 	}
  
@@ -116,16 +119,16 @@ int main(int argc, char** argv){
 	}
 	
 
-    if(normal_required){
-        //TODO avoid to recompute the normals if already in the input file
-        for(size_t i = 0; i < mesh_list.size() ; i++ ){
-            compute_normals(
-                mesh_list[i].vlist,
-                mesh_list[i].flist,
-                mesh_list[i].nlist                
-            );
-        }
-    }
+//     if(normal_required){
+//         //TODO avoid to recompute the normals if already in the input file
+//         for(size_t i = 0; i < mesh_list.size() ; i++ ){
+//             compute_normals(
+//                 mesh_list[i].vlist,
+//                 mesh_list[i].flist,
+//                 mesh_list[i].nlist                
+//             );
+//         }
+//     }
 	
 	
 	{//unify the meshes
@@ -139,10 +142,6 @@ int main(int argc, char** argv){
 		
 		global_mesh.vlist.resize(nverts);
 		global_mesh.flist.resize(nfaces);
-		
-        if(normal_required){
-            global_mesh.nlist.resize(nverts);
-        }
         
 		//fill the mesh
 		size_t gvidx = 0;
@@ -152,11 +151,7 @@ int main(int argc, char** argv){
 			for(size_t j = 0; j < mesh_list[i].vlist.size(); j++){
 				const vec3f v = mesh_list[i].vlist[j];
 				global_mesh.vlist[gvidx] = make_vec3d(v.x,v.y,v.z);
-                
-                if(normal_required){
-                    const vec3f n = mesh_list[i].nlist[j];
-                    global_mesh.nlist[gvidx] = make_vec3d(n.x,n.y,n.z);
-                }
+
                 
 				gvidx++;
 			}
@@ -182,18 +177,24 @@ int main(int argc, char** argv){
 	
 	bbuild.build();
 	
-	//bbuild.root->print();
-	
+    
+    if(assume_flat){
+        recompute_flat_verts_normals_and_curvature(global_mesh);
+    }
+    
+    
 	switch(oformat){
 		case SSV:{
-			write_tris_ssv_mt(std::cout, global_mesh,normal_required);
+			write_tris_ssv_mt(std::cout, global_mesh,write_normal);
 			bbuild.write_bvh_ssv(std::cout,oformat);
-            
+            write_normcurv_ssv_mt(std::cout, global_mesh);
             
 		}break;
 		case BIN:case NBIN:{
-			write_tris_bin_mt(std::cout, global_mesh,normal_required);
+			write_tris_bin_mt(std::cout, global_mesh,write_normal);
 			bbuild.write_bvh_ssv(std::cout,oformat);
+            write_normcurv_bin_mt(std::cout,global_mesh);
+
 		}break;
 		
 	};
