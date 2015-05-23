@@ -85,6 +85,7 @@ int main(int argc, char** argv){
 
             if(arg == "-flat"){
                 assume_flat = true;
+                write_normal = true;
             }
             
 		}
@@ -185,16 +186,20 @@ int main(int argc, char** argv){
     
 	switch(oformat){
 		case SSV:{
-			write_tris_ssv_mt(std::cout, global_mesh,write_normal);
+			write_tris_ssv_mt(std::cout, global_mesh);
 			bbuild.write_bvh_ssv(std::cout,oformat);
-            write_normcurv_ssv_mt(std::cout, global_mesh);
+            if(write_normal){
+                write_normcurv_ssv_mt(std::cout, global_mesh);
+            }
             
 		}break;
 		case BIN:case NBIN:{
-			write_tris_bin_mt(std::cout, global_mesh,write_normal);
+            
+			write_tris_bin_mt(std::cout, global_mesh);
 			bbuild.write_bvh_ssv(std::cout,oformat);
-            write_normcurv_bin_mt(std::cout,global_mesh);
-
+            if(write_normal){
+                write_normcurv_bin_mt(std::cout,global_mesh);
+            }
 		}break;
 		
 	};
@@ -207,8 +212,15 @@ int main(int argc, char** argv){
 
 
 void print_usage(){
-	std::cout << "usage: gbvh inputfile1 inputfile2 ..." << std::endl;
+	std::cout << "usage: gbvh [option] inputfile1 inputfile2 ..." << std::endl;
+    std::cout << "\t-ssv:\t produce ascii output" << std::endl;
+    std::cout << "\t-bin:\t produce binary format" << std::endl;
+    std::cout << "\t-bin:\t produce binary format" << std::endl;
+    std::cout << "\t-nbin:\t produce packed binary format" << std::endl;
+    std::cout << "\t-flat:\t assume flat triangles" << std::endl;
+
 }
+
 
 //TODO: this doesn't handle correctly the filepath
 bool compare_extension(const std::string &filename, 
