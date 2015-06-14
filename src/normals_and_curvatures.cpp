@@ -170,8 +170,6 @@ void write_normcurv_bin_mt(std::ostream &os,const  mesh &m){
     os << "#number of vertices"<< std::endl;
     os << m.vlist.size() <<std::endl;
     //create a packed list of normals
-    os << "##start normal and curvature list" << std::endl;
-
     {
         thrust::host_vector<vertex4f> packed_normals_k1(m.nlist.size());
         for(size_t i =0; i < m.nlist.size(); i++){
