@@ -1,4 +1,4 @@
  
 env = Environment()
 
-env.Program(target='./build/gbvh', source=[Glob("./src/*.cpp")],CPPPATH=['./include','../../lib/thrust/'],LIBS=['gomp'],CCFLAGS=['-Wall', '-fopenmp', '-DTHRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_OMP','-O3'])
+env.Program(target='./build/gbvh', source=[Glob("./src/*.cpp")],CPPPATH=['./include','../../lib/thrust/','../../lib/Eigen'],LIBS=['gomp'],CCFLAGS=['-Wall', '-fopenmp', '-DTHRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_OMP','-O3'])

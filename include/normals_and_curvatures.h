@@ -11,6 +11,17 @@ void compute_normals(
     std::vector<vec3f> &nlist //list of normals              
 );
 
+
+void compute_curvatures(
+    const std::vector<vec3f> &vlist, //list of vertex
+    const std::vector<vec3i> &flist, //list of faces
+    const std::vector<vec3f> &nlist, //list of normals              
+    std::vector<vec3f> &x1list, //list of normals              
+    std::vector<float> &k1list, //list of normals              
+    std::vector<float> &k2list //list of normals              
+);
+
+
 void recompute_flat_verts_normals_and_curvature(mesh &global_mesh);
 
 void write_normcurv_ssv_mt(std::ostream &os,const  mesh &m);

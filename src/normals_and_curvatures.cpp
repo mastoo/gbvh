@@ -3,14 +3,265 @@
 #include <packed_struct.h>
 #include <thrust/host_vector.h>
 #include <iomanip>
+#include <Eigen/Dense>
+#include <map>
+#include <set>
+
+
+
+template<typename DerivedA>
+Eigen::Matrix< typename DerivedA::Scalar, 
+               DerivedA::ColsAtCompileTime, 
+               DerivedA::RowsAtCompileTime> 
+PseudoInverse( const Eigen::MatrixBase<DerivedA> & a,                         
+               double epsilon = std::numeric_limits<typename DerivedA::Scalar>::epsilon())
+{
+ 
+
+    if(a.rows()<a.cols()){
+        std::cerr << " a.rows() " << a.rows() << std::endl;
+        std::cerr << " a.rows() " << a.rows() << std::endl;
+    }
+    
+    assert(a.rows()>=a.cols());
+    
+    typedef Eigen::Matrix<typename DerivedA::Scalar,
+                       DerivedA::RowsAtCompileTime,
+                       DerivedA::ColsAtCompileTime> InputType;
+ 
+    typedef Eigen::Matrix<typename DerivedA::Scalar,
+                        DerivedA::ColsAtCompileTime,
+                        DerivedA::RowsAtCompileTime> ReturnType;
+ 
+    Eigen::JacobiSVD<InputType> svd = a.jacobiSvd(Eigen::ComputeFullU |Eigen::ComputeFullV);
+
+    double tolerance = epsilon * std::max(a.cols(),a.rows()) * svd.singularValues().array().abs().maxCoeff();
+
+
+    ReturnType sigma = ReturnType::Zero(a.cols(), a.rows());
+
+
+    sigma.block(0, 0, a.cols(), a.cols()) = (svd.singularValues().array().abs()>tolerance).
+                                           select(svd.singularValues().array().inverse(), 0).matrix().asDiagonal();
+                                           
+
+    return svd.matrixV() * sigma * svd.matrixU().adjoint();
+
+    
+}
+
+void find_best_local_reference(const vec3f& np,
+                               vec3f &localX,
+                               vec3f &localY,
+                               vec3f &localZ)
+{
+
+                        
+    vec3f axis[3] = {make_vec3f(1.0,0.0,0.0),
+                     make_vec3f(0.0,1.0,0.0),
+                     make_vec3f(0.0,0.0,1.0)};
+    
+    int best_axis = 0;
+    float min_abs_dot = fabsf(dot(np,axis[best_axis]));
+   
+    for(int i = 1; i <= 2; i++){  
+        float abs_dot = fabsf(dot(np,axis[i]));
+        if(abs_dot < min_abs_dot){        
+            min_abs_dot = abs_dot;
+            best_axis = i;
+        }
+    }
+
+    localX = normalize(cross(np,axis[best_axis]));
+    localY = normalize(cross(np,localX));
+    localZ = normalize(localZ);
+
+}
+
+
+
+vec3f  transform_to_local_reference(
+    const vec3f& p,
+    const vec3f& orig,
+    const vec3f& localX,
+    const vec3f& localY,
+    const vec3f& localZ)    
+{
+    
+    vec3f new_p;
+    vec3f dp = p-orig;
+    new_p.x = dot(dp,localX);
+    new_p.y = dot(dp,localY);
+    new_p.z = dot(dp,localZ);
+    
+    return new_p;
+} 
+
+
+bool QSA(const vec3f  &p, 
+         const  vec3f &np,
+         const std::vector<vec3f > &point_list,
+         float &k1, vec3f & X1,
+         float &k2, vec3f & X2
+        )
+{
+
+
+
+    size_t num_points = point_list.size();
+    
+    vec3f localX;
+    vec3f localY;
+    vec3f localZ;
+    
+    //find a local orthonormal coordinate system with z-axis along Np    
+    find_best_local_reference(np,localX,localY,localZ); //localZ is equal to NP;
+    
+    //local coordinates of vertices         
+  
+    Eigen::Matrix<double,Eigen::Dynamic,3> M(num_points,3);
+    Eigen::Matrix<double,Eigen::Dynamic,1> Z_vec(num_points);
+
+        
+    for(size_t i = 0; i< num_points; i++){
+
+        vec3f new_p = transform_to_local_reference(point_list[i],p,localX,localY,localZ);
+        double xi = new_p.x;
+        double yi = new_p.y;
+        Z_vec[i] = new_p.z;
+        
+        M(i,0) = 0.5*(xi*xi);
+        M(i,1) = (xi*yi);
+        M(i,2) = 0.5*(yi*yi);
+    }   
+    
+    Eigen::Matrix<double,3,1> K = PseudoInverse(M)*Z_vec;
+    
+    Eigen::Matrix<double,2,2> W;
+    W(0,0) =  K[0];
+    W(0,1) =  K[1];
+    W(1,0) =  K[1] ;
+    W(1,1) =  K[2];
+    
+    Eigen::EigenSolver<Eigen::Matrix<double,2,2> > es(W);
+    
+    Eigen::Matrix<double,2,2> D  = es.pseudoEigenvalueMatrix();
+    Eigen::Matrix<double,2,2> V  = es.pseudoEigenvectors(); 
+        
+    k1 = -D(0,0);
+    k2 = -D(1,1);
+    
+    
+    X1 = normalize(V(0,0)*localX+V(1,0)*localY);
+    X2 = normalize(V(0,1)*localX+V(1,1)*localY);
+    
+    return true;
+}
+
+void compute_curvatures(
+    const std::vector<vec3f> &vlist, //list of vertex
+    const std::vector<vec3i> &flist, //list of faces
+    const std::vector<vec3f> &nlist, //list of normals              
+    std::vector<vec3f> &x1list, //list of normals              
+    std::vector<float> &k1list, //list of normals              
+    std::vector<float> &k2list //list of normals              
+){
+    
+    x1list.clear();
+    k1list.clear();
+    k2list.clear();   
+    
+    x1list.reserve(vlist.size());
+    k1list.reserve(vlist.size());
+    k2list.reserve(vlist.size());
+    
+    
+    std::vector< 
+        std::vector<int> 
+    >vert_to_face_map(vlist.size());
+    
+    
+    //for each vertex make a list of faces which share that particular vertex 
+    //and compute the normal of each face
+    for(size_t face = 0; face < flist.size(); face++){
+       vert_to_face_map[flist[face].a].push_back(face);
+       vert_to_face_map[flist[face].b].push_back(face);
+       vert_to_face_map[flist[face].c].push_back(face);
+    }
+    
+    //compute the curvatures
+    {
+     
+        std::set<int> adjacent_verts;
+        std::vector<vec3f> point_list;
+        //compute principal direction Vectors and curvatures for each vertex   
+        for (size_t v =0; v< vlist.size(); v++){
+            adjacent_verts.clear();
+            point_list.clear();
+            //make a list of adjacent vertices
+            for(size_t face =0; face<vert_to_face_map[v].size(); face++)
+            {
+                adjacent_verts.insert(flist[vert_to_face_map[v][face]].a);
+                adjacent_verts.insert(flist[vert_to_face_map[v][face]].b);
+                adjacent_verts.insert(flist[vert_to_face_map[v][face]].c);
+            }
+            //erase the vertex v itself
+            adjacent_verts.erase(v);        
+            
+            {//add other vertices
+                std::set<int> copy_of_adjacent_verts (adjacent_verts.begin(),adjacent_verts.end());
+                for (std::set<int>::iterator it=copy_of_adjacent_verts.begin(); 
+                     it!=copy_of_adjacent_verts.end(); ++it){
+                     
+                    for(size_t face =0; face<vert_to_face_map[*it].size(); face++){
+                        adjacent_verts.insert(flist[vert_to_face_map[*it][face]].a);
+                        adjacent_verts.insert(flist[vert_to_face_map[*it][face]].b);
+                        adjacent_verts.insert(flist[vert_to_face_map[*it][face]].c);
+                    }
+                }        
+                //erase the vertex at v
+                adjacent_verts.erase(v);
+            }
+            
+            for (std::set<int>::iterator it=adjacent_verts.begin(); it!=adjacent_verts.end(); ++it){
+                point_list.push_back(vlist[*it]);
+            }
+            
+            float k1,k2;
+            vec3f X1;
+            vec3f X2;
+            
+            if(point_list.size() < 3){
+                std::cerr << "v = " << v  << std::endl;
+            }
+            assert(point_list.size()>=3);
+            
+            //Compute QSA
+            QSA(vlist[v],nlist[v], point_list, k1, X1, k2, X2);
+                                                
+                        
+            x1list.push_back(X1);
+            k1list.push_back(k1);
+            k2list.push_back(k2);
+            
+        }
+    
+    }
+    
+}
 
 void compute_normals(
     const std::vector<vec3f> &vlist, //list of vertex
     const std::vector<vec3i> &flist, //list of faces
     std::vector<vec3f> &nlist //list of normals              
-){
+     ){
+
     nlist.clear();
+
+    
     nlist.reserve(vlist.size());
+
+    
     std::vector< 
         std::vector<int> 
     >vert_to_face_map(vlist.size());
@@ -54,7 +305,11 @@ void compute_normals(
         }        
 
         nlist.push_back(normalize(N));
-    }
+        
+    }   
+    
+    
+    
 }
 
 
