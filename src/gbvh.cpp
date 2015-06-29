@@ -125,7 +125,7 @@ int main(int argc, char** argv){
 	}
 	
 
-	if(write_normal_curvature){
+	if(write_normal_curvature && !assume_flat){
         for(size_t i = 0; i < mesh_list.size() ; i++ ){
             if(!mesh_list[i].normals_available){
                 compute_normals(
@@ -164,7 +164,7 @@ int main(int argc, char** argv){
 		global_mesh.flist.resize(nfaces);
         
         
-        if(write_normal_curvature){
+        if(write_normal_curvature && !assume_flat){
             global_mesh.nlist.resize(nverts);
             global_mesh.x1list.resize(nverts);
             global_mesh.k1_list.resize(nverts);
@@ -183,7 +183,7 @@ int main(int argc, char** argv){
                 
 				global_mesh.vlist[gvidx] = make_vec3d(v.x,v.y,v.z);
                 
-                if(write_normal_curvature){
+                if(write_normal_curvature && ! assume_flat){
 
                     const vec3f n   = mesh_list[i].nlist[j];
                     const vec3f x1  = mesh_list[i].x1list[j];
